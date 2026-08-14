@@ -84,6 +84,92 @@ Tabel `product_stocks` menyimpan kuantitas per kombinasi produk dan cabang, deng
 
 Tabel `stock_requests` menyimpan informasi pengajuan pada level header (cabang pemohon, pengaju, status keseluruhan), sementara `stock_request_items` menyimpan detail per produk dalam pengajuan tersebut, termasuk cabang sumber dan status yang ditentukan secara independen saat peninjauan.
 
+### Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    BRANCHES ||--o{ USERS : employs
+    BRANCHES ||--o{ PRODUCT_STOCKS : stores
+    BRANCHES ||--o{ STOCK_REQUESTS : "requesting_branch"
+    BRANCHES ||--o{ STOCK_REQUEST_ITEMS : "source_branch"
+    BRANCHES ||--o{ STOCK_MOVEMENTS : "source / destination"
+    CATEGORIES ||--o{ PRODUCTS : groups
+    PRODUCTS ||--o{ PRODUCT_STOCKS : "tracked in"
+    PRODUCTS ||--o{ STOCK_REQUEST_ITEMS : "requested as"
+    PRODUCTS ||--o{ STOCK_MOVEMENTS : moves
+    STOCK_REQUESTS ||--o{ STOCK_REQUEST_ITEMS : contains
+    STOCK_REQUESTS ||--o{ STOCK_MOVEMENTS : triggers
+    USERS ||--o{ STOCK_REQUESTS : "requested_by / approved_by"
+
+    BRANCHES {
+        bigint id PK
+        string name
+        string code UK
+        boolean is_central_warehouse
+        string address
+    }
+    USERS {
+        bigint id PK
+        string name
+        string email UK
+        string password
+        string role
+        bigint branch_id FK "nullable"
+    }
+    CATEGORIES {
+        bigint id PK
+        string name UK
+    }
+    PRODUCTS {
+        bigint id PK
+        bigint category_id FK
+        string sku UK
+        string name
+        text description
+        integer low_stock_threshold
+    }
+    PRODUCT_STOCKS {
+        bigint id PK
+        bigint product_id FK
+        bigint branch_id FK
+        integer quantity
+    }
+    STOCK_REQUESTS {
+        bigint id PK
+        bigint requesting_branch_id FK
+        bigint requested_by_user_id FK
+        bigint approved_by_user_id FK "nullable"
+        string status
+        text rejection_reason "nullable"
+        timestamp processed_at "nullable"
+    }
+    STOCK_REQUEST_ITEMS {
+        bigint id PK
+        bigint stock_request_id FK
+        bigint product_id FK
+        bigint source_branch_id FK "nullable"
+        integer quantity_requested
+        integer quantity_approved "nullable"
+        string status
+    }
+    STOCK_MOVEMENTS {
+        bigint id PK
+        bigint product_id FK
+        bigint source_branch_id FK "nullable"
+        bigint destination_branch_id FK "nullable"
+        integer quantity
+        string type
+        bigint stock_request_id FK "nullable"
+    }
+```
+
+Catatan pada relasi:
+
+- `product_stocks` memiliki batasan unik pada pasangan `(product_id, branch_id)`, memastikan satu produk hanya memiliki satu baris kuantitas per cabang.
+- `stock_request_items.source_branch_id` diisi hanya pada saat item disetujui, mencerminkan bahwa cabang sumber ditentukan saat peninjauan, bukan saat pengajuan dibuat.
+- `stock_movements.stock_request_id` bersifat nullable karena tidak semua pergerakan stok berasal dari alur persetujuan pengajuan; penambahan stok baru (`initial_stock`) tidak memiliki tautan ke pengajuan mana pun.
+- Sebagian besar foreign key menggunakan `restrictOnDelete`, mencegah penghapusan data induk (kategori, produk, cabang) selama masih direferensikan oleh data transaksi. Pengecualian pada `stock_request_items.stock_request_id`, yang menggunakan `cascadeOnDelete` karena item tidak memiliki makna independen tanpa pengajuan induknya.
+
 ## Keputusan Desain Teknis
 
 **Keamanan konkurensi.** Proses persetujuan stok melibatkan pembacaan dan penulisan pada baris `product_stocks` yang berpotensi diakses bersamaan oleh lebih dari satu proses peninjauan. Untuk mencegah kondisi balapan (race condition), setiap operasi persetujuan dibungkus dalam database transaction dengan penguncian baris (`lockForUpdate`) pada baris stok yang relevan sebelum melakukan pengurangan atau penambahan kuantitas.
