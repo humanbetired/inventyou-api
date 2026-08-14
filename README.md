@@ -1,4 +1,4 @@
-# InventYou — Multi-Branch Inventory & Order Management System
+# InventYou: Multi-Branch Inventory & Order Management System
 
 InventYou adalah sistem manajemen inventory dan distribusi stok untuk bisnis retail atau distribusi dengan banyak cabang. Sistem ini mengelola pergerakan stok antara satu gudang pusat dan beberapa cabang, lengkap dengan alur persetujuan permintaan stok, audit trail pergerakan barang, dan pelaporan.
 
